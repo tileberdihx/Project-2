@@ -14,7 +14,9 @@
 #include <QTextDocument>
 #include <QTextStream>
 #include <QToolBar>
-
+#include "notepad_exception.h"
+#include <QFileInfo>
+#include <QMessageBox>
 main_window::main_window()
 {
     setWindowTitle("Notepad");
@@ -192,30 +194,43 @@ void main_window::open_file()
     if (path.isEmpty()) {
         return;
     }
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return;
-    }
-    QTextStream in(&file);
-    editor->setPlainText(in.readAll());
-    current_file = path;
-    update_title();
-}
 
+    try {
+        if (!QFileInfo::exists(path)) {
+            throw file_not_found_exception(path.toStdString());
+        }
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            throw file_read_exception(path.toStdString());
+        }
+        QTextStream in(&file);
+        editor->setPlainText(in.readAll());
+        current_file = path;
+        update_title();
+
+    } catch (const notepad_exception& e) {
+        QMessageBox::critical(this, "Error", QString::fromStdString(e.what()));
+    }
+}
 void main_window::save_file()
 {
     if (current_file.isEmpty()) {
         save_file_as();
         return;
     }
-    QFile file(current_file);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        return;
-    }
-    QTextStream out(&file);
-    out << editor->toPlainText();
-}
 
+    try {
+        QFile file(current_file);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            throw file_write_exception(current_file.toStdString());
+        }
+        QTextStream out(&file);
+        out << editor->toPlainText();
+
+    } catch (const notepad_exception& e) {
+        QMessageBox::critical(this, "Error", QString::fromStdString(e.what()));
+    }
+}
 void main_window::save_file_as()
 {
     const auto path = QFileDialog::getSaveFileName(this, "Save File As");
