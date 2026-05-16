@@ -17,12 +17,24 @@
 #include "notepad_exception.h"
 #include <QFileInfo>
 #include <QMessageBox>
+#include "spell_checker.h"
+#include "spell_checker_highlighter.h"
+#include <QMenu>
+
+#include "sort.h"
+
 main_window::main_window()
 {
     setWindowTitle("Notepad");
     resize(800, 600);
 
     editor = new QTextEdit(this);
+    highlighter = new spell_checker_highlighter(editor->document(), checker);
+
+    editor->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(editor, &QTextEdit::customContextMenuRequested,
+        this, &main_window::show_context_menu);
+
     setCentralWidget(editor);
 
     connect(editor, &QTextEdit::textChanged, this, [this] {
@@ -41,7 +53,7 @@ main_window::main_window()
     setup_format_menu();
     setup_format_toolbar();
     setup_search_menu();
-    setup_word_frequency_menu();
+    setup_tools_menu();
 }
 
 void main_window::setup_file_menu()
@@ -343,39 +355,39 @@ void main_window::setup_search_menu()
     });
 }
 
-void main_window::setup_word_frequency_menu()
+void main_window::setup_tools_menu()
 {
-    auto* search_menu = menuBar()->findChild<QMenu*>("Tools");
-    if (search_menu == nullptr) {
-        search_menu = menuBar()->addMenu("Tools");
-    }
+    auto* tools_menu = menuBar()->addMenu("Tools");
 
-    auto* action_freq = search_menu->addAction("Word Frequency...");
+    auto* action_spell = tools_menu->addAction("Check Spelling...");
+    connect(action_spell, &QAction::triggered, this, [this] {
+        highlighter->rehighlight();
+    });
 
+    tools_menu->addSeparator();
+
+    auto* action_freq = tools_menu->addAction("Word Frequency...");
     connect(action_freq, &QAction::triggered, this, [this] {
         const std::string text = editor->toPlainText().toLower().toStdString();
 
         std::map<std::string, int> word_count;
         std::string word;
-
         for (const char ch : text) {
-            if (std::isalpha(ch)) {
+            if (std::isalpha(static_cast<unsigned char>(ch))) {
                 word += ch;
-            } else {
-                if (!word.empty()) {
-                    word_count[word]++;
-                    word.clear();
-                }
+            } else if (!word.empty()) {
+                word_count[word]++;
+                word.clear();
             }
         }
-
-        if (!word.empty())
+        if (!word.empty()) {
             word_count[word]++;
+        }
 
         std::vector<std::pair<std::string, int>> sorted_words(
             word_count.begin(), word_count.end());
 
-        std::sort(sorted_words.begin(), sorted_words.end(),
+        my::sort(sorted_words.begin(), sorted_words.end(),
             [](const auto& a, const auto& b) {
                 return a.second > b.second;
             });
@@ -397,16 +409,11 @@ void main_window::setup_word_frequency_menu()
         }
 
         auto* table = word_frequency_dlg->findChild<QTableWidget*>("results_table");
-
         table->setRowCount(static_cast<int>(sorted_words.size()));
         for (int i = 0; i < static_cast<int>(sorted_words.size()); ++i) {
             table->setItem(i, 0,
                 new QTableWidgetItem(QString::fromStdString(sorted_words[i].first)));
-
-            table->setItem(i, 1,
-                new QTableWidgetItem(QString::number(sorted_words[i].second)));
-            auto* count_item = new QTableWidgetItem(
-                QString::number(sorted_words[i].second));
+            auto* count_item = new QTableWidgetItem(QString::number(sorted_words[i].second));
             count_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(i, 1, count_item);
         }
@@ -416,6 +423,8 @@ void main_window::setup_word_frequency_menu()
         word_frequency_dlg->activateWindow();
     });
 }
+
+void main_window::setup_word_frequency_menu() { }
 
 void main_window::update_status_bar()
 {
@@ -434,4 +443,37 @@ void main_window::update_status_bar()
     statusBar()->showMessage(
         QString("Words: %1  |  Lines: %2").arg(words).arg(lines));
 
+}
+void main_window::show_context_menu(const QPoint& pos)
+{
+    QMenu* menu = editor->createStandardContextMenu();
+
+    QTextCursor cursor = editor->cursorForPosition(pos);
+    cursor.select(QTextCursor::WordUnderCursor);
+    const QString clicked_word = cursor.selectedText();
+
+    if (!clicked_word.isEmpty()) {
+        const std::string norm = spell_checker::normalize(clicked_word.toStdString());
+        if (!norm.empty() && !checker.is_correct(norm)) {
+            const auto suggestions = checker.suggestions(norm);
+
+            if (!suggestions.empty()) {
+                QAction* first = menu->actions().first();
+                menu->insertSeparator(first);
+
+                for (int i = static_cast<int>(suggestions.size()) - 1; i >= 0; --i) {
+                    const QString s = QString::fromStdString(suggestions[i]);
+                    auto* action = new QAction(s, menu);
+                    connect(action, &QAction::triggered, this, [this, cursor, s]() mutable {
+                        cursor.insertText(s);
+                    });
+                    menu->insertAction(first, action);
+                }
+                menu->insertSeparator(first);
+            }
+        }
+    }
+
+    menu->exec(editor->mapToGlobal(pos));
+    delete menu;
 }
