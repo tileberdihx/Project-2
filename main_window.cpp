@@ -32,8 +32,13 @@ main_window::main_window()
     resize(800, 600);
 
     editor = new QTextEdit(this);
-    highlighter = new spell_checker_highlighter(editor->document(), checker);
+    setCentralWidget(editor);
 
+    // Force document to be ready before attaching highlighter
+    editor->setDocument(editor->document());
+    highlighter = new spell_checker_highlighter(editor->document(), checker);
+    highlighter->setDocument(editor->document());
+    qDebug() << "Dictionary loaded:" << checker.loaded();
     editor->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(editor, &QTextEdit::customContextMenuRequested,
         this, &main_window::show_context_menu);

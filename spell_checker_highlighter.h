@@ -15,13 +15,14 @@ public:
         : QSyntaxHighlighter(document)
         , checker(checker)
     {
-        misspelled_format.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
+        misspelled_format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
         misspelled_format.setUnderlineColor(Qt::red);
     }
 
 protected:
     void highlightBlock(const QString& text) override
     {
+
         int start = -1;
         for (int i = 0; i <= text.length(); ++i) {
             const bool is_letter = (i < text.length()) && text[i].isLetter();

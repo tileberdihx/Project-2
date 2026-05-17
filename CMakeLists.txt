@@ -14,8 +14,8 @@ qt_add_executable(
         main_window.cpp
         text_transform.h
         notepad_exception.h
-        spell_checker.h                  # ← add
-        spell_checker_highlighter.h      # ← add
+        spell_checker.h
+        spell_checker_highlighter.h
         sort.h
         find_replace_dialog.ui
         word_frequency_dialog.ui
