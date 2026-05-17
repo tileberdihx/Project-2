@@ -20,6 +20,9 @@
 #include "spell_checker.h"
 #include "spell_checker_highlighter.h"
 #include <QMenu>
+#include <QColorDialog>
+#include <QFontDialog>
+#include <QLabel>
 
 #include "sort.h"
 
@@ -54,6 +57,14 @@ main_window::main_window()
     setup_format_toolbar();
     setup_search_menu();
     setup_tools_menu();
+    setup_view_menu();
+
+    label_cursor = new QLabel("Ln 1, Col 1");
+    statusBar()->addPermanentWidget(label_cursor);
+
+    connect(editor, &QTextEdit::cursorPositionChanged, this, [this] {
+        update_status_bar();
+    });
 }
 
 void main_window::setup_file_menu()
@@ -136,6 +147,64 @@ void main_window::setup_format_menu()
             apply_transform(*transform);
         });
     }
+
+    format_menu->addSeparator();
+
+    auto* action_font = format_menu->addAction("Font...");
+    connect(action_font, &QAction::triggered, this, [this] {
+        bool ok = false;
+        const QFont chosen = QFontDialog::getFont(&ok, editor->currentFont(), this, "Font");
+        if (!ok) {
+            return;
+        }
+        QTextCharFormat fmt;
+        fmt.setFont(chosen);
+        auto cursor = editor->textCursor();
+        if (!cursor.hasSelection()) {
+            cursor.select(QTextCursor::Document);
+        }
+        cursor.mergeCharFormat(fmt);
+    });
+
+    auto* action_color = format_menu->addAction("Text Color...");
+    connect(action_color, &QAction::triggered, this, [this] {
+        const QColor color = QColorDialog::getColor(editor->textColor(), this, "Text Color");
+        if (!color.isValid()) {
+            return;
+        }
+        QTextCharFormat fmt;
+        fmt.setForeground(color);
+        auto cursor = editor->textCursor();
+        if (!cursor.hasSelection()) {
+            cursor.select(QTextCursor::Document);
+        }
+        cursor.mergeCharFormat(fmt);
+    });
+}
+
+void main_window::setup_view_menu()
+{
+    auto* view_menu = menuBar()->addMenu("View");
+
+    auto* action_zoom_in = view_menu->addAction("Zoom In");
+    action_zoom_in->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Equal));
+    connect(action_zoom_in, &QAction::triggered, this, [this] {
+        editor->zoomIn(1);
+    });
+
+    auto* action_zoom_out = view_menu->addAction("Zoom Out");
+    action_zoom_out->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus));
+    connect(action_zoom_out, &QAction::triggered, this, [this] {
+        editor->zoomOut(1);
+    });
+
+    auto* action_zoom_reset = view_menu->addAction("Reset Zoom");
+    action_zoom_reset->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+    connect(action_zoom_reset, &QAction::triggered, this, [this] {
+        QFont font = editor->font();
+        font.setPointSize(QApplication::font().pointSize());
+        editor->setFont(font);
+    });
 }
 
 void main_window::setup_format_toolbar()
@@ -431,18 +500,17 @@ void main_window::update_status_bar()
     const QString text = editor->toPlainText();
     int words = 0;
     if (!text.trimmed().isEmpty()) {
-        words = text.split(QRegularExpression("\\s+"),
-                        Qt::SkipEmptyParts)
-                    .count();
+        words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).count();
     }
-
-    // count lines
     const int lines = editor->document()->lineCount();
 
-    // show in status bar
+    const QTextCursor cursor = editor->textCursor();
+    const int line = cursor.blockNumber() + 1;
+    const int col = cursor.columnNumber() + 1;
+    label_cursor->setText(QString("Ln %1, Col %2").arg(line).arg(col));
+
     statusBar()->showMessage(
         QString("Words: %1  |  Lines: %2").arg(words).arg(lines));
-
 }
 void main_window::show_context_menu(const QPoint& pos)
 {

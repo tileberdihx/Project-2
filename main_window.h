@@ -10,6 +10,7 @@
 #include <QString>
 #include <QTextDocument>
 #include <QTextEdit>
+#include <QLabel>
 
 #include <memory>
 #include <vector>
@@ -25,6 +26,7 @@ private:
     void setup_edit_menu();
     void setup_format_menu();
     void setup_format_toolbar();
+    void setup_view_menu();
 
     void setup_search_menu();
     void setup_tools_menu();
@@ -54,6 +56,8 @@ private:
 
     spell_checker checker { "data/words.txt" };
     spell_checker_highlighter* highlighter { nullptr };
+    QLabel* label_cursor { nullptr };
+
 };
 
 #endif // MAIN_WINDOW_H
